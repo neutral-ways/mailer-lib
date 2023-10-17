@@ -8,11 +8,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ses"
 	"github.com/aws/aws-sdk-go-v2/service/ses/types"
 	"go.uber.org/zap"
+	"go/build"
 	"gopkg.in/gomail.v2"
 	"html/template"
 	"io"
 	"log"
-	"os"
+	"reflect"
 )
 
 const (
@@ -91,21 +92,21 @@ func (mailer *Mailer) SendMail(msg Message) error {
 func (mailer *Mailer) create(tmpl *Template) (string, error) {
 	allTemplates := mailer.getBasicTemplates(tmpl)
 
-	curdir, err := os.Getwd()
+	pathBase, err := mailer.getCurrentPath()
 	if err != nil {
 		return "", err
 	}
 
 	var allPaths []string
 	for _, t := range allTemplates {
-		allPaths = append(allPaths, fmt.Sprintf("%s/%s", curdir+"/templates", t))
+		allPaths = append(allPaths, fmt.Sprintf("%s/%s", pathBase+"/templates/", t))
 	}
 
 	templates := template.Must(template.New("").Funcs(template.FuncMap{
 		"safe": func(s string) template.HTML { return template.HTML(s) },
 	}).ParseFiles(allPaths...))
-	var processed bytes.Buffer
 
+	var processed bytes.Buffer
 	var data interface{} = nil
 	if tmpl != nil {
 		data = tmpl.Data
@@ -125,4 +126,15 @@ func (mailer *Mailer) getBasicTemplates(tmpl *Template) []string {
 	}
 
 	return append(basicTemplates, tmpl.Path)
+}
+
+func (mailer *Mailer) getCurrentPath() (string, error) {
+	var t Template
+	packagePath := reflect.TypeOf(t).PkgPath()
+	detailPackage, err := build.Default.Import(packagePath, ".", build.FindOnly)
+	if err != nil {
+		return "", err
+	}
+
+	return detailPackage.Dir, nil
 }
