@@ -12,6 +12,7 @@ import (
 	"html/template"
 	"io"
 	"log"
+	"os"
 )
 
 const (
@@ -90,9 +91,14 @@ func (mailer *Mailer) SendMail(msg Message) error {
 func (mailer *Mailer) create(tmpl *Template) (string, error) {
 	allTemplates := mailer.getBasicTemplates(tmpl)
 
+	curdir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+
 	var allPaths []string
-	for _, tmpl := range allTemplates {
-		allPaths = append(allPaths, fmt.Sprintf("%s/%s", mailer.config.PathTemplate, tmpl))
+	for _, t := range allTemplates {
+		allPaths = append(allPaths, fmt.Sprintf("%s/%s", curdir+"/templates", t))
 	}
 
 	templates := template.Must(template.New("").Funcs(template.FuncMap{
@@ -105,7 +111,7 @@ func (mailer *Mailer) create(tmpl *Template) (string, error) {
 		data = tmpl.Data
 	}
 
-	err := templates.ExecuteTemplate(&processed, "page", data)
+	err = templates.ExecuteTemplate(&processed, "page", data)
 	if err != nil {
 		return "", err
 	}
