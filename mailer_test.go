@@ -1,7 +1,7 @@
 package mailer_lib
 
 import (
-	"fmt"
+	"github.com/magiconair/properties/assert"
 	"testing"
 )
 
@@ -19,5 +19,5 @@ func TestSendMail(t *testing.T) {
 	}
 
 	err := mailer.SendMail(msj)
-	fmt.Print(err)
+	assert.Equal(t, err, nil)
 }
