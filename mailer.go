@@ -8,11 +8,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ses"
 	"github.com/aws/aws-sdk-go-v2/service/ses/types"
 	"go.uber.org/zap"
+	"go/build"
 	"gopkg.in/gomail.v2"
 	"html/template"
 	"io"
 	"log"
-	"os"
+	"path/filepath"
+	"reflect"
+	"runtime"
 )
 
 const (
@@ -25,19 +28,19 @@ const (
 var basicTemplates = []string{page, header, footer}
 
 type Mailer struct {
-	log    *zap.Logger
-	config ConfigMailer
+	Log    *zap.Logger
+	Config ConfigMailer
 }
 
 func NewMailer(log *zap.Logger, config ConfigMailer) *Mailer {
 	return &Mailer{
-		log:    log,
-		config: config,
+		Log:    log,
+		Config: config,
 	}
 }
 
 func (mailer *Mailer) SendMail(msg Message) error {
-	fromMail := fmt.Sprintf("CoreZero <%s>", mailer.config.FromMail)
+	fromMail := fmt.Sprintf("CoreZero <%s>", mailer.Config.FromMail)
 	messageBody, err := mailer.create(msg.Template)
 	if err != nil {
 		log.Println("Error occurred while creating email body", err)
@@ -89,23 +92,18 @@ func (mailer *Mailer) SendMail(msg Message) error {
 }
 
 func (mailer *Mailer) create(tmpl *Template) (string, error) {
-	allTemplates := mailer.getBasicTemplates(tmpl)
-
-	curdir, err := os.Getwd()
+	allPaths, err := mailer.getAllPaths(tmpl)
+	mailer.Log.Info("all paths", zap.Any("paths", allPaths))
+	mailer.Log.Info("error all paths", zap.Error(err))
 	if err != nil {
 		return "", err
-	}
-
-	var allPaths []string
-	for _, t := range allTemplates {
-		allPaths = append(allPaths, fmt.Sprintf("%s/%s", curdir+"/templates", t))
 	}
 
 	templates := template.Must(template.New("").Funcs(template.FuncMap{
 		"safe": func(s string) template.HTML { return template.HTML(s) },
 	}).ParseFiles(allPaths...))
-	var processed bytes.Buffer
 
+	var processed bytes.Buffer
 	var data interface{} = nil
 	if tmpl != nil {
 		data = tmpl.Data
@@ -113,16 +111,61 @@ func (mailer *Mailer) create(tmpl *Template) (string, error) {
 
 	err = templates.ExecuteTemplate(&processed, "page", data)
 	if err != nil {
+		mailer.Log.Info("error execute template", zap.Error(err))
 		return "", err
 	}
 
 	return string(processed.Bytes()), nil
 }
 
-func (mailer *Mailer) getBasicTemplates(tmpl *Template) []string {
+func (mailer *Mailer) getBasicTemplates(tmpl *Template) ([]string, error) {
 	if tmpl == nil {
-		return append(basicTemplates, contentEmpty)
+		basicTemplates = append(basicTemplates, contentEmpty)
 	}
 
-	return append(basicTemplates, tmpl.Path)
+	/*
+		pathBase, err := mailer.getCurrentPath()
+		mailer.Log.Info("get current path", zap.String("path base", pathBase))
+		if err != nil {
+			mailer.Log.Error("error get current path", zap.Error(err))
+			return nil, err
+		}
+	*/
+	pathBase := tmpl.PathBase
+	var allPaths []string
+	for _, t := range basicTemplates {
+		mailer.Log.Info("path created", zap.String("path", filepath.Join(pathBase, t)))
+		allPaths = append(allPaths, filepath.Join(pathBase, t))
+	}
+
+	return allPaths, nil
+}
+
+func (mailer *Mailer) getCurrentPath() (string, error) {
+	_, b, _, _ := runtime.Caller(0)
+	root := filepath.Join(filepath.Dir(b), "../..")
+	mailer.Log.Info("root", zap.String("root path", root))
+
+	var t Template
+	packagePath := reflect.TypeOf(t).PkgPath()
+	detailPackage, err := build.Default.Import(packagePath, ".", build.FindOnly)
+	//aca esta el error
+	if err != nil {
+		return "", err
+	}
+
+	return detailPackage.Dir, nil
+}
+
+func (mailer *Mailer) getAllPaths(tmpl *Template) ([]string, error) {
+	allTemplates, err := mailer.getBasicTemplates(tmpl)
+	if err != nil {
+		return nil, err
+	}
+
+	if tmpl != nil {
+		allTemplates = append(allTemplates, filepath.Join(tmpl.PathBase, tmpl.FileName))
+	}
+
+	return allTemplates, nil
 }

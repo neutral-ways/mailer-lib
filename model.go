@@ -8,8 +8,9 @@ type Message struct {
 }
 
 type Template struct {
-	Path string
-	Data interface{}
+	PathBase string
+	FileName string
+	Data     interface{}
 }
 
 type Attachment struct {
@@ -20,7 +21,6 @@ type Attachment struct {
 type TemplatePath string
 
 type ConfigMailer struct {
-	AWSRegion    string
-	FromMail     string
-	PathTemplate string
+	AWSRegion string
+	FromMail  string
 }
