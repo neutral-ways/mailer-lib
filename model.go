@@ -20,7 +20,6 @@ type Attachment struct {
 type TemplatePath string
 
 type ConfigMailer struct {
-	AWSRegion    string
-	FromMail     string
-	PathTemplate string
+	AWSRegion string
+	FromMail  string
 }
